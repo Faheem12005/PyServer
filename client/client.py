@@ -1,5 +1,6 @@
 import socket
 from tqdm import tqdm
+import os
 
 HEADER = 64
 PORT = 5050
@@ -9,13 +10,39 @@ UPLOAD_MSG = "!UPLOAD"
 LIST_MSG = "!LIST"
 DOWNLOAD_MSG = "!DOWNLOAD"
 DELETE_MSG = "!DELETE"
-SERVER = "172.20.10.2"
+SERVER = "192.168.1.14"
 ADDR = (SERVER,PORT)
 
 client = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 client.connect(ADDR)
-        
 
+def upload_file():
+    file_name = input("Enter the file name to upload: ")
+    try:
+        file_size = os.path.getsize(file_name)
+        send(UPLOAD_MSG)
+        send(file_name)
+        client.send(str(file_size).encode(FORMAT))
+        
+        with open(file_name, "rb") as f:
+            bar = tqdm(total=file_size, unit='B', unit_scale=True, unit_divisor=1024, dynamic_ncols=True)
+            bytes_sent = 0
+            while bytes_sent < file_size:
+                data = f.read(1024)
+                if not data:
+                    break
+                client.send(data)
+                bytes_sent += len(data)
+                bar.update(len(data))
+            bar.close()
+        
+        response = client.recv(1024).decode(FORMAT)
+        print(f"Server Response: {response}")
+    except FileNotFoundError:
+        print(f"File '{file_name}' not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        
 
 def send(msg):
     message = msg.encode(FORMAT)
@@ -29,8 +56,10 @@ connected = True
 while connected:
     print("-Enter option-\n1.Uploading\n2.Downloading\n3.Listing\n4.Delete\n5.Exit")
     option = int(input())
+
     if option == 1:
-        send(UPLOAD_MSG)
+        upload_file()
+
     if option == 2:
         send(DOWNLOAD_MSG)
         file_name = input()
@@ -75,3 +104,5 @@ while connected:
     if option == 5:
         send(DISCONNECT_MSG)
         connected = False
+    else:
+        print("Enter correct option!")

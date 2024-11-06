@@ -46,17 +46,18 @@ class Client:
         file_length = self.conn.recv(HEADER).decode(FORMAT)
         file_name = self.conn.recv(int(file_length)).decode(FORMAT)
 
-        if delete_flags[file_name]:
-            print(f"[THREAD {threading.current_thread().name}] Cannot download {file_name}, marked for deletion!")
-            self.conn.send(f"Cannot download {file_name}, file is being deleted!".encode(FORMAT))
-            return
-        
         cwd = os.getcwd()
         filed = os.path.join(cwd,"files")
         dirlist = os.listdir(filed)
         if file_name in dirlist:
             print(f"{file_name} found!")
 
+
+            if delete_flags[file_name]:
+                print(f"[THREAD {threading.current_thread().name}] Cannot download {file_name}, marked for deletion!")
+                self.conn.send(f"Cannot download {file_name}, file is being deleted!".encode(FORMAT))
+                return
+        
             print(f"[THREAD {threading.current_thread().name}] Waiting to download {file_name}")
             semaphore_files[file_name].acquire()
             print(f"[THREAD {threading.current_thread().name}] Acquired semaphore for {file_name}")
@@ -78,6 +79,7 @@ class Client:
                 print(f"[THREAD {threading.current_thread().name}] Released semaphore for {file_name}")
 
         else:
+            self.conn.send(f"File not found!".encode(FORMAT))
             print("File not found!")
 
     def listMsg(self):
