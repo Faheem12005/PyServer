@@ -1,6 +1,7 @@
 import socket
 import threading
 import os
+from tqdm import tqdm
 
 HEADER = 64
 PORT = 5050
@@ -40,6 +41,46 @@ class Client:
         self.conn = conn
         self.addr = addr
         self.connected = True
+
+    def upload(self):
+    # Receive initial response to check if file is found
+        response = self.conn.recv(128).decode(FORMAT)
+        if "not found" in response:
+            print(f"[THREAD {threading.current_thread().name}] File not found")
+        else:
+            print(f"[THREAD {threading.current_thread().name}] File found")
+
+            # Receive and decode file size
+            file_size = int(self.conn.recv(128).decode(FORMAT).strip())
+            
+            # Receive and decode file name
+            file_name = self.conn.recv(128).decode(FORMAT).strip()
+            print(f"Receiving file: {file_name}")
+
+            # Set up the progress bar
+            bar = tqdm(range(file_size), f"Receiving {file_name}", unit="B", unit_scale=True, unit_divisor=1024, dynamic_ncols=True, ncols=20)
+            
+            # Open the file for writing
+            with open(f"files/{file_name}", "wb") as f:
+                bytes_recv = 0
+                while bytes_recv < file_size:
+                    data = self.conn.recv(1024)
+                    if not data:
+                        break
+                    f.write(data)
+                    bytes_recv += len(data)
+                    bar.update(len(data))
+                bar.close()
+
+            print("File downloaded successfully")
+
+            # After successful upload, add delete flag, lock, and semaphore for the new file
+            with threading.Lock():
+                delete_flags[file_name] = False
+                delete_locks[file_name] = threading.Lock()
+                semaphore_files[file_name] = threading.BoundedSemaphore(value=max_downloads)
+
+            print(f"Added delete flag, lock, and semaphore for new file: {file_name}")
 
 
     def download(self):
@@ -128,7 +169,7 @@ class Client:
                 if(msg==DISCONNECT_MSG):
                     self.connected = False
                 elif(msg==UPLOAD_MSG):
-                    self.connected = True
+                    self.upload()
                 elif(msg==DOWNLOAD_MSG):
                     self.download()
                 elif(msg==LIST_MSG):
@@ -158,4 +199,3 @@ def start():
 
 print("[STARTING] server is starting")
 start()
-

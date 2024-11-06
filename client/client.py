@@ -1,6 +1,8 @@
+
 import socket
 from tqdm import tqdm
 import os
+import time
 
 HEADER = 64
 PORT = 5050
@@ -10,38 +12,12 @@ UPLOAD_MSG = "!UPLOAD"
 LIST_MSG = "!LIST"
 DOWNLOAD_MSG = "!DOWNLOAD"
 DELETE_MSG = "!DELETE"
-SERVER = "192.168.1.14"
+SERVER = "172.20.10.2"
 ADDR = (SERVER,PORT)
 
 client = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 client.connect(ADDR)
 
-def upload_file():
-    file_name = input("Enter the file name to upload: ")
-    try:
-        file_size = os.path.getsize(file_name)
-        send(UPLOAD_MSG)
-        send(file_name)
-        client.send(str(file_size).encode(FORMAT))
-        
-        with open(file_name, "rb") as f:
-            bar = tqdm(total=file_size, unit='B', unit_scale=True, unit_divisor=1024, dynamic_ncols=True)
-            bytes_sent = 0
-            while bytes_sent < file_size:
-                data = f.read(1024)
-                if not data:
-                    break
-                client.send(data)
-                bytes_sent += len(data)
-                bar.update(len(data))
-            bar.close()
-        
-        response = client.recv(1024).decode(FORMAT)
-        print(f"Server Response: {response}")
-    except FileNotFoundError:
-        print(f"File '{file_name}' not found.")
-    except Exception as e:
-        print(f"An error occurred: {e}")
         
 
 def send(msg):
@@ -51,6 +27,47 @@ def send(msg):
     send_length += b' ' *  (HEADER-len(send_length))
     client.send(send_length)
     client.send(message)
+
+
+import time
+
+def upload_file():
+    send(UPLOAD_MSG)
+    cwd = os.getcwd()
+    filed = os.path.join(cwd, "files")
+    dirlist = os.listdir(filed)
+
+    print("Enter name of the file to upload:")
+    file_name = input()
+    if file_name in dirlist:
+        print(f"{file_name} found!")
+        client.send("File found".encode(FORMAT))
+        
+        try:
+            file_path = os.path.join(filed, file_name)
+            with open(file_path, "rb") as file:
+                # Send file size
+                file_size = os.stat(file_path).st_size
+                client.send(str(file_size).encode(FORMAT).ljust(128))
+                time.sleep(0.1)  # Small delay to allow server to process
+
+                # Send file name
+                client.send(file_name.encode(FORMAT).ljust(128))
+                time.sleep(0.1)  # Small delay to allow server to process
+
+                # Send file content in chunks
+                while True:
+                    data = file.read(1024)
+                    if not data:
+                        break
+                    client.send(data)
+
+        finally:
+            print("File uploaded successfully")
+    else:
+        print(f"{file_name} not found!")
+        client.send("File not found".encode(FORMAT))
+
 
 connected = True
 while connected:
